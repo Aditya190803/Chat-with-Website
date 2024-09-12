@@ -9,10 +9,12 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
-model_name = "BAAI/bge-small-en"
-hf = HuggingFaceBgeEmbeddings(model_name=model_name)
+@st.cache_data
+def get_embedding_model(model_name):
+    return HuggingFaceBgeEmbeddings(model_name=model_name)
 
-def get_vectorstore_from_url(url):
+@st.cache_data
+def get_vectorstore_from_url(url, embedding_model):
     # get the text in document form
     loader = WebBaseLoader(url)
     document = loader.load()
@@ -22,7 +24,7 @@ def get_vectorstore_from_url(url):
     document_chunks = text_splitter.split_documents(document)
     
     # create a vectorstore from the chunks
-    vector_store = Chroma.from_documents(document_chunks, hf)
+    vector_store = Chroma.from_documents(document_chunks, embedding_model)
 
     return vector_store
 
@@ -72,31 +74,39 @@ st.title("Chat with websites")
 # sidebar
 with st.sidebar:
     st.header("Settings")
-    website_url = st.text_input("Website URL")
+    with st.form(key='url_form'):
+        website_url = st.text_input("Website URL")
+        submit_button = st.form_submit_button(label="Submit")
 
-if website_url is None or website_url == "":
-    st.info("Please enter a website URL")
+    if submit_button:
+        st.session_state.website_url = website_url
+
+if "website_url" in st.session_state:
+    website_url = st.session_state.website_url
+    if website_url:
+        # session state
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = [
+                AIMessage(content="Hello, I am a bot. How can I help you?")
+            ]
+        if "vector_store" not in st.session_state:
+            embedding_model = get_embedding_model("BAAI/bge-small-en")
+            st.session_state.vector_store = get_vectorstore_from_url(website_url, embedding_model)    
+
+        # user input
+        user_query = st.chat_input("Type your message here...")
+        if user_query:
+            response = get_response(user_query)
+            st.session_state.chat_history.append(HumanMessage(content=user_query))
+            st.session_state.chat_history.append(AIMessage(content=response))
+            
+        # conversation
+        for message in st.session_state.chat_history:
+            if isinstance(message, AIMessage):
+                with st.chat_message("AI"):
+                    st.write(message.content)
+            elif isinstance(message, HumanMessage):
+                with st.chat_message("Human"):
+                    st.write(message.content)
 else:
-    # session state
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [
-            AIMessage(content="Hello, I am a bot. How can I help you?")
-        ]
-    if "vector_store" not in st.session_state:
-        st.session_state.vector_store = get_vectorstore_from_url(website_url)    
-
-    # user input
-    user_query = st.chat_input("Type your message here...")
-    if user_query is not None and user_query != "":
-        response = get_response(user_query)
-        st.session_state.chat_history.append(HumanMessage(content=user_query))
-        st.session_state.chat_history.append(AIMessage(content=response))
-        
-    # conversation
-    for message in st.session_state.chat_history:
-        if isinstance(message, AIMessage):
-            with st.chat_message("AI"):
-                st.write(message.content)
-        elif isinstance(message, HumanMessage):
-            with st.chat_message("Human"):
-                st.write(message.content)
+    st.info("Please enter a website URL and press Submit.")
