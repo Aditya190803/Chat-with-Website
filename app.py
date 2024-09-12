@@ -14,7 +14,7 @@ def get_embedding_model(model_name):
     return HuggingFaceBgeEmbeddings(model_name=model_name)
 
 @st.cache_data
-def get_vectorstore_from_url(url, embedding_model):
+def get_vectorstore_from_url(url, _embedding_model):  # Note the leading underscore
     # get the text in document form
     loader = WebBaseLoader(url)
     document = loader.load()
@@ -24,7 +24,7 @@ def get_vectorstore_from_url(url, embedding_model):
     document_chunks = text_splitter.split_documents(document)
     
     # create a vectorstore from the chunks
-    vector_store = Chroma.from_documents(document_chunks, embedding_model)
+    vector_store = Chroma.from_documents(document_chunks, _embedding_model)
 
     return vector_store
 
