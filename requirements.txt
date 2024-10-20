@@ -4,5 +4,5 @@ langchain_community
 langchain_groq
 sentence_transformers
 beautifulsoup4
-chromadb
+faiss-cpu
 langchain_huggingface
